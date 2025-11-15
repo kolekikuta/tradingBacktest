@@ -6,6 +6,7 @@ import matplotlib.dates as mdates
 import os
 from datetime import datetime
 
+
 # get spy data from yfinance and return as dataframe
 def download_spy_data(start_date, end_date, file_path="spy_data.csv"):
     today = datetime.today().date()
@@ -15,7 +16,7 @@ def download_spy_data(start_date, end_date, file_path="spy_data.csv"):
         print("CSV not found. Downloading fresh SPY data...")
         return _download_and_save(start_date, end_date, file_path)
 
-    # Try reading CSV 
+    # Try reading CSV
     try:
         df = pd.read_csv(file_path, parse_dates=["Date"])
     except Exception:
@@ -29,9 +30,11 @@ def download_spy_data(start_date, end_date, file_path="spy_data.csv"):
 
     # Case 3: Last date is not up to today
     last_date = df["Date"].max().date()
-    if last_date < today:
+    if today - last_date > pd.Timedelta(days=2):
         print(f"CSV outdated. Last date: {last_date}. Downloading updated SPY data...")
         return _download_and_save(start_date, end_date, file_path)
+
+    df["Date"] = pd.to_datetime(df["Date"], utc=True).dt.tz_localize(None)
 
     # CSV is valid and current
     print("CSV is up to date.")
@@ -49,6 +52,8 @@ def _download_and_save(start_date, end_date, file_path):
     except Exception as e:
         print(f"Error downloading SPY data: {e}")
         return pd.DataFrame()
+
+
 
 #calculate EMAs and MACDs
 def calculate_ema_macd(df):
@@ -98,16 +103,16 @@ def backtest_strategy(df):
                 target_price = entry_price * (1 + take_profit_pct)
                 entry_date = date
                 in_trade = True
-                print(f"BUY at {entry_price:.2f} on {date.date()} | Target: {target_price:.2f}, Stop: {stop_price:.2f}")
+                #print(f"BUY at {entry_price:.2f} on {date.date()} | Target: {target_price:.2f}, Stop: {stop_price:.2f}")
         else:
             if price >= target_price:
                 cash = cash * (target_price / entry_price)
-                print(f"SELL (TP HIT) at {target_price:.2f} on {date.date()} | Portfolio: {cash:.2f}")
+                #print(f"SELL (TP HIT) at {target_price:.2f} on {date.date()} | Portfolio: {cash:.2f}")
                 trades.append((entry_date, date, entry_price, target_price, 'win'))
                 in_trade = False
             elif price <= stop_price:
                 cash = cash * (stop_price / entry_price)
-                print(f"SELL (STOP HIT) at {stop_price:.2f} on {date.date()} | Portfolio: {cash:.2f}")
+                #print(f"SELL (STOP HIT) at {stop_price:.2f} on {date.date()} | Portfolio: {cash:.2f}")
                 trades.append((entry_date, date, entry_price, stop_price, 'loss'))
                 in_trade = False
 
@@ -120,7 +125,7 @@ def backtest_strategy(df):
         total_trades = len(trades)
         wins = sum(1 for t in trades if t[4] == 'win')
         accuracy = (wins / total_trades) * 100
-        print(f'Accuracy: {accuracy:.2f}% trades were profitable')
+        #print(f'Accuracy: {accuracy:.2f}% trades were profitable')
 
     # Buy-and-hold comparison: buy as many shares as possible at first available price
     initial_cash = initial_cash if 'initial_cash' in locals() else 1000
@@ -138,11 +143,11 @@ def backtest_strategy(df):
         final_bh = df['Buy_and_Hold'].iloc[-1]
         strategy_return = (final_strategy / initial_cash - 1) * 100
         bh_return = (final_bh / initial_cash - 1) * 100
-        print(f"Final simulated strategy portfolio: ${final_strategy:.2f} ({strategy_return:.2f}% return)")
-        print(f"Final buy-and-hold portfolio:     ${final_bh:.2f} ({bh_return:.2f}% return)")
+        #print(f"Final simulated strategy portfolio: ${final_strategy:.2f} ({strategy_return:.2f}% return)")
+        #print(f"Final buy-and-hold portfolio:     ${final_bh:.2f} ({bh_return:.2f}% return)")
         if final_bh != 0:
             rel = (final_strategy / final_bh - 1) * 100
-            print(f"Strategy vs Buy-and-Hold: {rel:.2f}% {'outperformance' if rel>0 else 'underperformance'}")
+            #print(f"Strategy vs Buy-and-Hold: {rel:.2f}% {'outperformance' if rel>0 else 'underperformance'}")
     except Exception:
         # if something unexpected happens, skip printing comparison
         pass
@@ -208,14 +213,3 @@ def plot(df):
     # Save the second figure
     fig2.savefig("figures/figure2_portfolio_value.png", dpi=200, bbox_inches='tight')
     plt.show()
-
-today = pd.Timestamp.today().normalize()
-start_date = today - pd.DateOffset(years=5)
-end_date = today
-df = download_spy_data(start_date, end_date)
-
-
-
-# backtest trading strategy
-
-# evaluate returns

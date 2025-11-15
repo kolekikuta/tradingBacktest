@@ -15,3 +15,9 @@
 .PanelGroup, .Panel {
     min-width: 0;
 }
+
+.panel-fill {
+    height: 100%;
+    width: 100%;
+    min-height: 0;
+}

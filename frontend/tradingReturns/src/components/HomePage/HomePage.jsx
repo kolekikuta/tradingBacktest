@@ -30,14 +30,38 @@ export default function HomePage() {
     */
 
     useEffect(() => {
-        try {
-            const response = axios.get('http://localhost:5000/api/data').then((response) => {
-                setData(response.data);
-            });
+        async function fetchData() {
+            try {
+                const response = await axios.get('http://localhost:5000/api/data');
+                const json = response.data;
+
+                const formatted = json.dates.map((date, i) => ({
+                    date,
+                    open: json.open[i],
+                    close: json.close[i],
+                    high: json.high[i],
+                    low: json.low[i],
+                    ema12: json.ema12[i],
+                    ema26: json.ema26[i],
+                    macd: json.macd[i],
+                    signal: json.signal[i],
+                    hist: json.hist_difference[i],
+                    ema200: json.ema200[i],
+                    trendDirection: json.trendDirection[i],
+                    buy: json.buy_signals[i],
+                    portfolio: json.portfolio_values[i],
+                    buyHold: json.buy_and_hold_values[i]
+                }));
+
+                setData(formatted);
+
+            }
+            catch (error) {
+                console.error('Error fetching data:', error);
+            }
         }
-        catch (error) {
-            console.error('Error fetching data:', error);
-        }
+        fetchData();
+
     }, []);
 
     return (
@@ -45,7 +69,9 @@ export default function HomePage() {
             <Panel defaultSize={90}>
                 <PanelGroup direction="vertical">
                     <Panel defaultSize={70} className="panel">
-                        <Charts />
+                        <div className="panel-fill">
+                            <Charts data={data}/>
+                        </div>
                     </Panel>
                     <PanelResizeHandle />
                     <Panel defaultSize={30} className="panel">

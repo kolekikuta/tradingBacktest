@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import './Charts.css';
+import PriceChart from './PriceChart';
 
-export default function Charts() {
+export default function Charts({ data }) {
     const [activeTab, setActiveTab] = useState('price');
 
 
 
     return (
-        <>
+        <div style={{ height: '100%', width: '100%' }}>
             <div className="charts-header">
                 <h1>Charts</h1>
                 <div className="charts-tabs">
@@ -34,6 +35,8 @@ export default function Charts() {
                 </div>
             </div>
 
-        </>
+            <PriceChart data={data} activeTab={activeTab} />
+
+        </div>
     )
 }
