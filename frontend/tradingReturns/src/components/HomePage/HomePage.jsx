@@ -84,7 +84,7 @@ export default function HomePage() {
             </Panel>
             <PanelResizeHandle />
             <Panel defaultSize={10} className="panel">
-                <Returns />
+                <Returns data={data}/>
             </Panel>
 
         </PanelGroup>

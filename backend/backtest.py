@@ -152,6 +152,8 @@ def backtest_strategy(df):
         # if something unexpected happens, skip printing comparison
         pass
 
+    df = df.round(2)
+
     return df
 
 def plot(df):
