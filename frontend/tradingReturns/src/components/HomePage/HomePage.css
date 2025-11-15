@@ -1,0 +1,17 @@
+.panel {
+    border: 1px solid #444;
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+.panel-container {
+    height: 100%;
+    width: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    box-sizing: border-box;
+}
+
+.PanelGroup, .Panel {
+    min-width: 0;
+}

@@ -1,0 +1,22 @@
+.charts-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.charts-tabs {
+    display: flex;
+    gap: 5px;
+}
+
+.active-tab {
+    font-size: .9em;
+    background-color: #2b1da5;
+    transition: ease-in-out 0.2s;
+}
+
+.inactive-tab {
+    font-size: .9em;
+    background-color: #424242;
+    transition: ease-in-out 0.2s;
+}

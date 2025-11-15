@@ -1,0 +1,221 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+import yfinance as yf
+import matplotlib.dates as mdates
+import os
+from datetime import datetime
+
+# get spy data from yfinance and return as dataframe
+def download_spy_data(start_date, end_date, file_path="spy_data.csv"):
+    today = datetime.today().date()
+
+    # Case 1: No CSV file exists
+    if not os.path.exists(file_path):
+        print("CSV not found. Downloading fresh SPY data...")
+        return _download_and_save(start_date, end_date, file_path)
+
+    # Try reading CSV 
+    try:
+        df = pd.read_csv(file_path, parse_dates=["Date"])
+    except Exception:
+        print("CSV unreadable. Downloading fresh SPY data...")
+        return _download_and_save(start_date, end_date, file_path)
+
+    # Case 2: File exists but is empty
+    if df.empty:
+        print("CSV is empty. Downloading SPY data...")
+        return _download_and_save(start_date, end_date, file_path)
+
+    # Case 3: Last date is not up to today
+    last_date = df["Date"].max().date()
+    if last_date < today:
+        print(f"CSV outdated. Last date: {last_date}. Downloading updated SPY data...")
+        return _download_and_save(start_date, end_date, file_path)
+
+    # CSV is valid and current
+    print("CSV is up to date.")
+    return df
+
+
+def _download_and_save(start_date, end_date, file_path):
+    try:
+
+        ticker = yf.Ticker("SPY")
+        df = ticker.history(start=start_date, end=end_date, auto_adjust=True).reset_index()
+        df.to_csv(file_path, index=False)
+        return df
+
+    except Exception as e:
+        print(f"Error downloading SPY data: {e}")
+        return pd.DataFrame()
+
+#calculate EMAs and MACDs
+def calculate_ema_macd(df):
+    df['EMA12'] = df['Close'].ewm(span=12, adjust=False).mean()
+    df['EMA26'] = df['Close'].ewm(span=26, adjust=False).mean()
+    df['MACD'] = df['EMA12'] - df['EMA26']
+    df['Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+    df['hist_difference'] = df['MACD'] - df['Signal']
+    df['EMA200'] = df['Close'].ewm(span=200, adjust=False).mean()
+    df['trendDirection'] = np.where(df['Close'] > df['EMA200'], 'up', 'down')
+
+    # Calculate Buy Signals
+    df['Buy_Signal'] = 0
+    for i in range(1, len(df)):
+        if (
+            df['hist_difference'].iloc[i-1] < 0 and df['hist_difference'].iloc[i] > 0 and
+            df['MACD'].iloc[i] < 0 and df['Signal'].iloc[i] < 0 and
+            df['trendDirection'].iloc[i] == "up"
+        ):
+            df.loc[df.index[i], 'Buy_Signal'] = 1
+
+    return df
+
+def backtest_strategy(df):
+
+    #Portfolio Simulation
+    initial_cash = 1000
+    cash = initial_cash
+    in_trade = False
+    entry_price = 0
+    entry_date = None
+    trades = []
+    portfolio_values = []
+
+    stop_loss_pct = 0.02
+    profit_ratio = 1.5
+    take_profit_pct = stop_loss_pct * profit_ratio
+
+    for i in range(len(df)):
+        price = df['Close'].iloc[i]
+        date = df['Date'].iloc[i]
+
+        if not in_trade:
+            if df['Buy_Signal'].iloc[i] == 1:
+                entry_price = price
+                stop_price = entry_price * (1 - stop_loss_pct)
+                target_price = entry_price * (1 + take_profit_pct)
+                entry_date = date
+                in_trade = True
+                print(f"BUY at {entry_price:.2f} on {date.date()} | Target: {target_price:.2f}, Stop: {stop_price:.2f}")
+        else:
+            if price >= target_price:
+                cash = cash * (target_price / entry_price)
+                print(f"SELL (TP HIT) at {target_price:.2f} on {date.date()} | Portfolio: {cash:.2f}")
+                trades.append((entry_date, date, entry_price, target_price, 'win'))
+                in_trade = False
+            elif price <= stop_price:
+                cash = cash * (stop_price / entry_price)
+                print(f"SELL (STOP HIT) at {stop_price:.2f} on {date.date()} | Portfolio: {cash:.2f}")
+                trades.append((entry_date, date, entry_price, stop_price, 'loss'))
+                in_trade = False
+
+        portfolio_values.append(cash)
+    # record portfolio values for every row (even if no trades occurred)
+    df['Portfolio'] = portfolio_values
+
+    # Accuracy scoring
+    if len(trades) > 0:
+        total_trades = len(trades)
+        wins = sum(1 for t in trades if t[4] == 'win')
+        accuracy = (wins / total_trades) * 100
+        print(f'Accuracy: {accuracy:.2f}% trades were profitable')
+
+    # Buy-and-hold comparison: buy as many shares as possible at first available price
+    initial_cash = initial_cash if 'initial_cash' in locals() else 1000
+    first_valid_idx = df['Close'].first_valid_index()
+    if first_valid_idx is not None and df['Close'].iloc[first_valid_idx] > 0:
+        first_price = df['Close'].iloc[first_valid_idx]
+        bh_shares = initial_cash / first_price
+        df['Buy_and_Hold'] = df['Close'] * bh_shares
+    else:
+        df['Buy_and_Hold'] = np.nan
+
+    # Final comparison prints
+    try:
+        final_strategy = df['Portfolio'].iloc[-1]
+        final_bh = df['Buy_and_Hold'].iloc[-1]
+        strategy_return = (final_strategy / initial_cash - 1) * 100
+        bh_return = (final_bh / initial_cash - 1) * 100
+        print(f"Final simulated strategy portfolio: ${final_strategy:.2f} ({strategy_return:.2f}% return)")
+        print(f"Final buy-and-hold portfolio:     ${final_bh:.2f} ({bh_return:.2f}% return)")
+        if final_bh != 0:
+            rel = (final_strategy / final_bh - 1) * 100
+            print(f"Strategy vs Buy-and-Hold: {rel:.2f}% {'outperformance' if rel>0 else 'underperformance'}")
+    except Exception:
+        # if something unexpected happens, skip printing comparison
+        pass
+
+    return df
+
+def plot(df):
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
+    # Plot 1: Close Price and EMA200
+    ax1.plot(df["Date"], df["Close"], color="#00BFFF", linewidth=1.5, label="Close Price")
+    ax1.plot(df["Date"], df["EMA200"], color="#FF5555", linestyle="--", linewidth=1.2, label="EMA 200")
+    buy_points = df[df['Buy_Signal'] == 1]
+    ax1.scatter(buy_points['Date'], buy_points["Close"], color="#00FF88", marker="^", s=100, label="Buy Signal", zorder=5)
+    ax1.set_title('SPY Close Price')
+    ax1.legend(loc="upper left", fontsize=10)
+    ax1.set_ylabel("Price ($)")
+    ax1.grid(True, linestyle="--", alpha=0.3)
+
+
+    # Plot 2: MACD and Signal Line
+    ax2.plot(df["Date"], df["MACD"], color="#1E90FF", linewidth=1.2, label="MACD")
+    ax2.plot(df["Date"], df["Signal"], color="#FFB347", linewidth=1.2, label="Signal")
+    ax2.axhline(0, color="#888888", linestyle="--", linewidth=1)
+    for i in buy_points.index:
+        ax2.annotate('↑', (df['Date'].iloc[i], df['MACD'].iloc[i]), color='#00FF88', fontsize=12, ha='center')
+
+    ax2.legend(loc="upper left", fontsize=9)
+    ax2.set_ylabel("MACD")
+    ax2.grid(True, linestyle="--", alpha=0.3)
+
+    # Plot 3: Histogram
+    colors = ["#00FF88" if h >= 0 else "#FF5555" for h in df["hist_difference"]]
+    ax3.bar(df["Date"], df["hist_difference"], color=colors, width=1)
+    ax3.axhline(0, color="#666666", linestyle="--", linewidth=1)
+    ax3.set_ylabel("Histogram")
+    ax3.set_xlabel("Date")
+    ax3.grid(True, linestyle="--", alpha=0.3)
+
+    ax3.xaxis.set_major_locator(mdates.YearLocator())
+    ax3.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+    fig.autofmt_xdate()
+    plt.tight_layout()
+    os.makedirs("figures", exist_ok=True)
+    fig.savefig('figures/figure1_trading_strategy.png', dpi=300, bbox_inches='tight')
+    plt.show()
+
+    #figure 2: Portfolio Value
+    fig2, ax4 = plt.subplots(figsize=(16, 9))
+    ax4.plot(df["Date"], df["Portfolio"], color="#9370DB", linewidth=2.5, label="Simulated Strategy")
+    # plot buy-and-hold if available
+    if 'Buy_and_Hold' in df.columns:
+        ax4.plot(df["Date"], df["Buy_and_Hold"], color="#2ECC71", linewidth=2.0, linestyle='--', label="Buy and Hold")
+    ax4.set_title("Portfolio Value Over Time", color="white", fontsize=16)
+    ax4.set_xlabel("Date", color="white")
+    ax4.set_ylabel("Portfolio Value ($)", color="white")
+    ax4.grid(True, linestyle="--", alpha=0.3)
+    ax4.legend(facecolor="#111111", edgecolor="#222222", fontsize=10, loc="upper left")
+    ax4.xaxis.set_major_locator(mdates.YearLocator())
+    ax4.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+    fig2.autofmt_xdate()
+    plt.tight_layout()
+
+    # Save the second figure
+    fig2.savefig("figures/figure2_portfolio_value.png", dpi=200, bbox_inches='tight')
+    plt.show()
+
+today = pd.Timestamp.today().normalize()
+start_date = today - pd.DateOffset(years=5)
+end_date = today
+df = download_spy_data(start_date, end_date)
+
+
+
+# backtest trading strategy
+
+# evaluate returns

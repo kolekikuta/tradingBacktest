@@ -1,0 +1,28 @@
+.strategy-builder-container {
+    overflow-y: auto;
+}
+
+.strategy-builder-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+button {
+    background-color: #2b1da5;
+}
+
+.strategy-signals {
+    display: flex;
+    flex-direction: column;
+    width: 50%;
+    height: 100%;
+    border: 1px solid #ccc;
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+.strategy-builder-settings {
+    display: flex;
+    gap: 10px;
+}
