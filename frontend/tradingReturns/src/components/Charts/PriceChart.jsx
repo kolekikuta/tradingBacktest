@@ -11,7 +11,7 @@ export default function PriceChart({ data, buySignals }) {
                 <Tooltip />
 
                 <Line type="monotone" dataKey="close" stroke="blue" dot={false} />
-                <Line type="monotone" dataKey="ema200" stroke="orange" dot={false} />
+                <Line type="monotone" dataKey="ema_trend" stroke="orange" dot={false} />
 
                 {buySignals && data.map((d, i) =>
                     d.buy === 1 ? (

@@ -79,14 +79,14 @@ def insert_spy_data_to_db(df):
 
 
 #calculate EMAs and MACDs
-def calculate_ema_macd(df):
-    df['EMA12'] = df['Close'].ewm(span=12, adjust=False).mean()
-    df['EMA26'] = df['Close'].ewm(span=26, adjust=False).mean()
-    df['MACD'] = df['EMA12'] - df['EMA26']
-    df['Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+def calculate_ema_macd(df, ema_fast, ema_slow, signal_len, ema_trend):
+    df['EMA_fast'] = df['Close'].ewm(span=ema_fast, adjust=False).mean()
+    df['EMA_slow'] = df['Close'].ewm(span=ema_slow, adjust=False).mean()
+    df['MACD'] = df['EMA_fast'] - df['EMA_slow']
+    df['Signal'] = df['MACD'].ewm(span=signal_len, adjust=False).mean()
     df['hist_difference'] = df['MACD'] - df['Signal']
-    df['EMA200'] = df['Close'].ewm(span=200, adjust=False).mean()
-    df['trendDirection'] = np.where(df['Close'] > df['EMA200'], 'up', 'down')
+    df['EMA_trend'] = df['Close'].ewm(span=ema_trend, adjust=False).mean()
+    df['trendDirection'] = np.where(df['Close'] > df['EMA_trend'], 'up', 'down')
 
     # Calculate Buy Signals
     df['Buy_Signal'] = 0
@@ -142,7 +142,6 @@ def backtest_strategy(df, stop_loss_pct, take_profit_pct):
         total_trades = len(trades)
         wins = sum(1 for t in trades if t[4] == 'win')
         win_rate = (wins / total_trades) * 100
-        #print(f'Accuracy: {accuracy:.2f}% trades were profitable')
 
     # Buy-and-hold comparison: buy as many shares as possible at first available price
     initial_cash = initial_cash if 'initial_cash' in locals() else 1000
@@ -173,7 +172,7 @@ def plot(df):
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
     # Plot 1: Close Price and EMA200
     ax1.plot(df["Date"], df["Close"], color="#00BFFF", linewidth=1.5, label="Close Price")
-    ax1.plot(df["Date"], df["EMA200"], color="#FF5555", linestyle="--", linewidth=1.2, label="EMA 200")
+    ax1.plot(df["Date"], df["EMA_trend"], color="#FF5555", linestyle="--", linewidth=1.2, label="EMA Trend")
     buy_points = df[df['Buy_Signal'] == 1]
     ax1.scatter(buy_points['Date'], buy_points["Close"], color="#00FF88", marker="^", s=100, label="Buy Signal", zorder=5)
     ax1.set_title('SPY Close Price')

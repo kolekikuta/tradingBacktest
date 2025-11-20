@@ -13,6 +13,19 @@ export default function StrategyBuilder({ formatData }) {
         take_profit_pct: 0.1,
     });
 
+    function debounce(fn, delay) {
+        let timeout;
+        return(...args) => {
+            if(timeout) return;
+
+            timeout = setTimeout(() => {
+                timeout = null;
+            }, delay);
+
+            fn(...args);
+        };
+    }
+
     async function handleBacktest() {
         try {
             const response = await axios.post('http://localhost:5000/api/data', settings);
@@ -23,12 +36,14 @@ export default function StrategyBuilder({ formatData }) {
         }
     }
 
+    const debouncedBacktest = debounce(handleBacktest, 1000);
+
 
     return (
         <div className="strategy-builder-container">
             <div className="strategy-builder-header">
                 <h1>Strategy Builder</h1>
-                <button onClick={handleBacktest}>Backtest</button>
+                <button onClick={debouncedBacktest}>Backtest</button>
             </div>
 
             <div className="strategy-builder-settings">
@@ -58,6 +73,20 @@ export default function StrategyBuilder({ formatData }) {
                                 setSettings(prev => ({
                                     ...prev,
                                     ema_slow: Number(e.target.value)
+                                }))
+                            }
+                        />
+                    </div>
+                    <div>
+                        <label>Signal Period: </label>
+                        <input
+                            type="number"
+                            min="1"
+                            value={settings.signal_len}
+                            onChange={e =>
+                                setSettings(prev => ({
+                                    ...prev,
+                                    signal_len: Number(e.target.value)
                                 }))
                             }
                         />
