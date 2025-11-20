@@ -16,7 +16,7 @@ export default function HistogramChart({ data }) {
         <ResponsiveContainer width="100%" height="100%">
             <BarChart data={histData}>
                 <CartesianGrid strokeOpacity={0.2} />
-                <XAxis dataKey="date" hide={true} />
+                <XAxis dataKey="date"/>
                 <YAxis />
                 <Tooltip />
 

@@ -5,53 +5,76 @@ import yfinance as yf
 import matplotlib.dates as mdates
 import os
 from datetime import datetime
+from models import Spy
+from sqlalchemy.exc import SQLAlchemyError
 
 
 # get spy data from yfinance and return as dataframe
 def download_spy_data(start_date, end_date, file_path="spy_data.csv"):
     today = datetime.today().date()
-
-    # Case 1: No CSV file exists
-    if not os.path.exists(file_path):
-        print("CSV not found. Downloading fresh SPY data...")
-        return _download_and_save(start_date, end_date, file_path)
-
-    # Try reading CSV
+    df = pd.DataFrame()
+    # query database for existing data
     try:
-        df = pd.read_csv(file_path, parse_dates=["Date"])
-    except Exception:
-        print("CSV unreadable. Downloading fresh SPY data...")
-        return _download_and_save(start_date, end_date, file_path)
+        records = Spy.query.all()
+        data = [{
+            "Date": record.date,
+            "Open": record.open,
+            "High": record.high,
+            "Low": record.low,
+            "Close": record.close,
+            "Volume": record.volume
+        } for record in records]
+        df = pd.DataFrame(data)
+    except Exception as e:
+        print(f"Error querying database: {e}")
+        return pd.DataFrame()
 
-    # Case 2: File exists but is empty
+
     if df.empty:
-        print("CSV is empty. Downloading SPY data...")
-        return _download_and_save(start_date, end_date, file_path)
+        print("No existing records. Downloading full data.")
+        ticker = yf.Ticker("SPY")
+        df = ticker.history(start=start_date, end=end_date, auto_adjust=True).reset_index()
+        insert_spy_data_to_db(df)
+        return df
 
     # Case 3: Last date is not up to today
-    last_date = df["Date"].max().date()
+    last_date = df["Date"].max()
     if today - last_date > pd.Timedelta(days=2):
-        print(f"CSV outdated. Last date: {last_date}. Downloading updated SPY data...")
-        return _download_and_save(start_date, end_date, file_path)
+        print(f"Data outdated. Last date: {last_date}. Downloading updated SPY data...")
+        try:
+            ticker = yf.Ticker("SPY")
+            df = ticker.history(start=start_date, end=end_date, auto_adjust=True).reset_index()
+            insert_spy_data_to_db(df)
+        except Exception as e:
+            print(f"Error downloading SPY data: {e}")
+            return pd.DataFrame()
 
-    df["Date"] = pd.to_datetime(df["Date"], utc=True).dt.tz_localize(None)
 
-    # CSV is valid and current
-    print("CSV is up to date.")
+    df["Date"] = pd.to_datetime(df["Date"])
+
+    # Database is valid and current
+    print("Database is up to date.")
     return df
 
 
-def _download_and_save(start_date, end_date, file_path):
+def insert_spy_data_to_db(df):
+    from app import db  # Import here to avoid circular imports
     try:
-
-        ticker = yf.Ticker("SPY")
-        df = ticker.history(start=start_date, end=end_date, auto_adjust=True).reset_index()
-        df.to_csv(file_path, index=False)
-        return df
-
-    except Exception as e:
-        print(f"Error downloading SPY data: {e}")
-        return pd.DataFrame()
+        for _, row in df.iterrows():
+            record = Spy(
+                date=row["Date"].date(),
+                open=row["Open"],
+                high=row["High"],
+                low=row["Low"],
+                close=row["Close"],
+                volume=row["Volume"]
+            )
+            db.session.add(record)
+        db.session.commit()
+        print("SPY data inserted into database successfully.")
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        print(f"Error inserting SPY data into database: {e}")
 
 
 
@@ -77,7 +100,7 @@ def calculate_ema_macd(df):
 
     return df
 
-def backtest_strategy(df):
+def backtest_strategy(df, stop_loss_pct, take_profit_pct):
 
     #Portfolio Simulation
     initial_cash = 1000
@@ -88,9 +111,6 @@ def backtest_strategy(df):
     trades = []
     portfolio_values = []
 
-    stop_loss_pct = 0.02
-    profit_ratio = 1.5
-    take_profit_pct = stop_loss_pct * profit_ratio
 
     for i in range(len(df)):
         price = df['Close'].iloc[i]
@@ -103,16 +123,13 @@ def backtest_strategy(df):
                 target_price = entry_price * (1 + take_profit_pct)
                 entry_date = date
                 in_trade = True
-                #print(f"BUY at {entry_price:.2f} on {date.date()} | Target: {target_price:.2f}, Stop: {stop_price:.2f}")
         else:
             if price >= target_price:
                 cash = cash * (target_price / entry_price)
-                #print(f"SELL (TP HIT) at {target_price:.2f} on {date.date()} | Portfolio: {cash:.2f}")
                 trades.append((entry_date, date, entry_price, target_price, 'win'))
                 in_trade = False
             elif price <= stop_price:
                 cash = cash * (stop_price / entry_price)
-                #print(f"SELL (STOP HIT) at {stop_price:.2f} on {date.date()} | Portfolio: {cash:.2f}")
                 trades.append((entry_date, date, entry_price, stop_price, 'loss'))
                 in_trade = False
 
@@ -124,7 +141,7 @@ def backtest_strategy(df):
     if len(trades) > 0:
         total_trades = len(trades)
         wins = sum(1 for t in trades if t[4] == 'win')
-        accuracy = (wins / total_trades) * 100
+        win_rate = (wins / total_trades) * 100
         #print(f'Accuracy: {accuracy:.2f}% trades were profitable')
 
     # Buy-and-hold comparison: buy as many shares as possible at first available price
@@ -143,18 +160,14 @@ def backtest_strategy(df):
         final_bh = df['Buy_and_Hold'].iloc[-1]
         strategy_return = (final_strategy / initial_cash - 1) * 100
         bh_return = (final_bh / initial_cash - 1) * 100
-        #print(f"Final simulated strategy portfolio: ${final_strategy:.2f} ({strategy_return:.2f}% return)")
-        #print(f"Final buy-and-hold portfolio:     ${final_bh:.2f} ({bh_return:.2f}% return)")
         if final_bh != 0:
             rel = (final_strategy / final_bh - 1) * 100
-            #print(f"Strategy vs Buy-and-Hold: {rel:.2f}% {'outperformance' if rel>0 else 'underperformance'}")
     except Exception:
-        # if something unexpected happens, skip printing comparison
         pass
 
     df = df.round(2)
 
-    return df
+    return df, strategy_return, bh_return, rel, win_rate
 
 def plot(df):
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 10), sharex=True)

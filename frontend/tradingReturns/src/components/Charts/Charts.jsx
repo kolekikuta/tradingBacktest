@@ -51,8 +51,6 @@ export default function Charts({ data }) {
                     /> Show Buy Signals
                 </label>
             }
-
-
         </div>
     )
 }

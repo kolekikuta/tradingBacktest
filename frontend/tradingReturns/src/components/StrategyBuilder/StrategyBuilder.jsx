@@ -2,7 +2,7 @@ import { useState } from 'react';
 import './StrategyBuilder.css';
 import axios from 'axios';
 
-export default function StrategyBuilder() {
+export default function StrategyBuilder({ formatData }) {
     const [settings, setSettings] = useState({
         ema_fast: 12,
         ema_slow: 26,
@@ -14,10 +14,10 @@ export default function StrategyBuilder() {
     });
 
     async function handleBacktest() {
-        console.log('Running backtest with settings:', settings);
         try {
-            const response = await axios.post('http://localhost:5000/api/backtest', settings);
+            const response = await axios.post('http://localhost:5000/api/data', settings);
             console.log('Backtest results:', response.data);
+            formatData(response.data);
         } catch (error) {
             console.error('Error running backtest:', error);
         }
@@ -38,16 +38,28 @@ export default function StrategyBuilder() {
                         <label>Fast EMA Period: </label>
                         <input
                             type="number"
+                            min="1"
                             value= {settings.ema_fast}
-                            onChange={e => setSettings({...settings, ema_fast: parseInt(e.target.value)})}
+                            onChange={e =>
+                                setSettings(prev => ({
+                                    ...prev,
+                                    ema_fast: Number(e.target.value)
+                                }))
+                            }
                         />
                     </div>
                     <div>
                         <label>Slow EMA Period: </label>
                         <input
                             type="number"
+                            min="1"
                             value= {settings.ema_slow}
-                            onChange={e => setSettings({...settings, ema_slow: parseInt(e.target.value)})}
+                            onChange={e =>
+                                setSettings(prev => ({
+                                    ...prev,
+                                    ema_slow: Number(e.target.value)
+                                }))
+                            }
                         />
                     </div>
                     <div>
@@ -55,7 +67,12 @@ export default function StrategyBuilder() {
                             <input
                                 type="checkbox"
                                 checked={settings.require_macd_below_zero}
-                                onChange={e => setSettings({...settings, require_macd_below_zero: e.target.checked})}
+                                onChange={e =>
+                                    setSettings(prev => ({
+                                        ...prev,
+                                        require_macd_below_zero: e.target.checked
+                                    }))
+                                }
                             />
                             Require MACD Below Zero
                         </label>
@@ -67,16 +84,32 @@ export default function StrategyBuilder() {
                         <label>Stop Loss: </label>
                         <input
                             type="number"
+                            min="0"
+                            max="1"
+                            step="0.01"
                             value={settings.stop_loss_pct}
-                            onChange={e => setSettings({...settings, stop_loss_pct: parseInt(e.target.value)})}
+                            onChange={e =>
+                                setSettings(prev => ({
+                                    ...prev,
+                                    stop_loss_pct: parseFloat(e.target.value)
+                                }))
+                            }
                         />
                     </div>
                     <div>
                         <label>Take Profit: </label>
                         <input
                             type="number"
+                            min="0"
+                            max="1"
+                            step="0.01"
                             value={settings.take_profit_pct}
-                            onChange={e => setSettings({...settings, take_profit_pct: parseInt(e.target.value)})}
+                            onChange={e =>
+                                setSettings(prev => ({
+                                    ...prev,
+                                    take_profit_pct: parseFloat(e.target.value)
+                                    }))
+                                }
                             />
                     </div>
 
